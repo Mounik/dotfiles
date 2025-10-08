@@ -1,0 +1,98 @@
+export ZSH="$HOME/.oh-my-zsh" # zsh
+
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" # brew
+
+# Function to add a directory to PATH without duplicates
+add_to_path() {
+  if [[ ":$PATH:" != *":$1:"* ]]; then
+    PATH="$1:$PATH"
+  fi
+}
+
+add_to_path "${KREW_ROOT:-$HOME/.krew}/bin" # krew
+add_to_path "/mnt/c/Program Files/Oracle/VirtualBox" # vbox
+
+export PATH
+
+ZSH_THEME="custom-agnoster"
+
+# ZSH Setup
+plugins=(
+    z
+    git
+    kubectl
+    kube-ps1
+    vagrant
+    sudo
+    docker
+    docker-compose
+    ansible
+    terraform
+    zsh-autosuggestions
+    you-should-use
+    zsh-syntax-highlighting
+)
+
+source $ZSH/oh-my-zsh.sh
+
+setopt NO_BEEP # Disable windows beep
+
+# AWS autocomplete
+autoload bashcompinit && bashcompinit
+autoload -Uz compinit && compinit
+complete -C "$(which aws_completer)" aws
+
+# gitlab-ci-local autocomplete
+_gitlab-ci-local_yargs_completions()
+{
+  local reply
+  local si=$IFS
+  IFS=$'
+' reply=($(COMP_CWORD="$((CURRENT-1))" COMP_LINE="$BUFFER" COMP_POINT="$CURSOR" "$(which gitlab-ci-local)" --get-yargs-completions "${words[@]}"))
+  IFS=$si
+  _describe 'values' reply
+}
+compdef _gitlab-ci-local_yargs_completions gitlab-ci-local
+
+source <(fzf --zsh) # Fuzzy Finder
+
+# Atuin + fzf integration
+atuin-setup() {
+  if ! which atuin &> /dev/null; then return 1; fi
+  export ATUIN_NOBIND="true"
+  eval "$(atuin init zsh)"
+  fzf-atuin-history-widget() {
+      local selected num
+      setopt localoptions noglobsubst noposixbuiltins pipefail no_aliases 2>/dev/null
+      local atuin_opts="--cmd-only --print0"
+      local fzf_opts=(
+          --height=${FZF_TMUX_HEIGHT:-80%}
+          --tac
+          "-n2..,.."
+          --tiebreak=index
+          "--query=${LBUFFER}"
+          "+m"
+          "--read0"
+          '--preview=echo {}+{2..}'
+          "--preview-window=down:3:hidden:wrap"
+          "--bind=?:toggle-preview"
+          "--bind=ctrl-d:reload(atuin search $atuin_opts -c $PWD),ctrl-r:reload(atuin search $atuin_opts)"
+      )
+      selected=$(
+          eval "atuin search ${atuin_opts}" |
+              fzf "${fzf_opts[@]}"
+      )
+      local ret=$?
+      if [ -n "$selected" ]; then
+          LBUFFER+="${selected}"
+      fi
+      zle reset-prompt
+      return $ret
+  }
+  zle -N fzf-atuin-history-widget
+  bindkey '^R' fzf-atuin-history-widget
+}
+atuin-setup
+
+[[ -f ~/.zsh/env.zsh ]] && source ~/.zsh/env.zsh # custom env
+[[ -f ~/.zsh/aliases.zsh ]] && source ~/.zsh/aliases.zsh # custom aliases
